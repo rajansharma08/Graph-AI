@@ -301,16 +301,19 @@ Generate the SQL:"""
             return self._fallback_nl_summary(question, df)
 
         prompt = f"""You are answering a business question about an SAP Order-to-Cash dataset.
+Your goal is to provide a clear, concise, human-readable answer.
+
 Question: {question}
-SQL used: {sql}
 Rows returned: {len(df)}
-Data (first 20 rows as JSON):
+Data (first 20 rows):
 {df.head(20).to_json(orient='records', date_format='iso')}
 
-Provide a concise business-focused answer:
-1. State the main finding clearly.
-2. Use exact numbers from the data.
-3. Keep it under 150 words."""
+Provide a natural language business summary:
+1. Start with a brief statement of what the data shows
+2. Highlight key numbers, patterns, and insights
+3. If there are multiple records, summarize trends rather than listing all records
+4. Use business language, not technical jargon
+5. Keep it under 200 words and easy to understand for a business user"""
         try:
             out = self.model.generate_content(prompt)
             return out.text.strip()
@@ -321,6 +324,65 @@ Provide a concise business-focused answer:
         """Generate a natural language summary without LLM."""
         q = question.lower()
         cols = set(df.columns)
+
+        # Generic product listing
+        if {"product", "productDescription"}.issubset(cols):
+            lines = [f"Found {len(df)} products in the system:\n"]
+            for i, row in df.head(20).iterrows():
+                product = row.get("product", "N/A")
+                desc = row.get("productDescription", "No description")
+                plants = row.get("plant_count", 0)
+                storage = row.get("storage_locations", 0)
+                lines.append(f"• **{product}** - {desc}")
+                if plants and plants > 0:
+                    lines.append(f"  Available in {plants} plant(s) with {storage} storage location(s)")
+            if len(df) > 20:
+                lines.append(f"\n... and {len(df) - 20} more products")
+            return "\n".join(lines)
+
+        # Generic customer listing
+        if {"businessPartner", "businessPartnerName"}.issubset(cols) and "total_orders" in cols:
+            lines = [f"Company has {len(df)} business partners:\n"]
+            total_orders = df["total_orders"].sum() if "total_orders" in cols else 0
+            total_invoices = df["total_invoices"].sum() if "total_invoices" in cols else 0
+            lines.append(f"📊 Overall Statistics:")
+            lines.append(f"  • Total Customers: {len(df)}")
+            lines.append(f"  • Total Orders: {int(total_orders)}")
+            lines.append(f"  • Total Invoices: {int(total_invoices)}\n")
+            lines.append(f"Top Customers by Order Volume:")
+            for i, row in df.head(10).iterrows():
+                partner = row.get("businessPartnerName", "Unknown")
+                orders = int(row.get("total_orders", 0))
+                invoices = int(row.get("total_invoices", 0))
+                lines.append(f"  {i+1}. {partner}: {orders} orders, {invoices} invoices")
+            if len(df) > 10:
+                lines.append(f"\n... showing top 10 of {len(df)} customers")
+            return "\n".join(lines)
+
+        # O2C Flow (order to delivery to billing)
+        if {"salesOrder", "deliveryDocument", "billingDocument"}.intersection(cols):
+            lines = ["Order-to-Cash (O2C) Flow Summary:\n"]
+            total = len(df)
+            completed = df[df["billingDocument"].notna()].shape[0] if "billingDocument" in cols else 0
+            delivered = df[df["deliveryDocument"].notna()].shape[0] if "deliveryDocument" in cols else 0
+            
+            lines.append(f"📈 Process Status:")
+            lines.append(f"  • Total Sales Orders: {total}")
+            lines.append(f"  • Orders Delivered: {delivered} ({int(delivered/max(total,1)*100)}%)")
+            lines.append(f"  • Orders Billed: {completed} ({int(completed/max(total,1)*100)}%)\n")
+            
+            lines.append(f"Sample Order Flows (showing first {min(5, total)}):")
+            for i, row in df.head(5).iterrows():
+                order = row.get("salesOrder", "N/A")
+                customer = row.get("customer", "Unknown")
+                delivery = row.get("deliveryDocument", "—")
+                billing = row.get("billingDocument", "—")
+                lines.append(f"  • Order {order} ({customer})")
+                lines.append(f"    → Delivery: {delivery} → Billing: {billing}")
+            
+            if total > 5:
+                lines.append(f"\n... showing 5 of {total} orders")
+            return "\n".join(lines)
 
         # Top products by billing document count
         if {"product", "billing_document_count"}.issubset(cols):
@@ -344,24 +406,37 @@ Provide a concise business-focused answer:
             lines.append(f"\nTotal affected orders: {len(df)}.")
             return "\n".join(lines)
 
-        # Billing document trace
-        if {"billingDocument", "salesOrder", "deliveryDocument"}.intersection(cols):
-            sample = df.head(5).to_dict(orient="records")
-            lines = ["Order-to-Cash Flow Trace:"]
-            for row in sample:
-                bd = row.get("billingDocument", "N/A")
-                so = row.get("salesOrder", "N/A")
-                dd = row.get("deliveryDocument", "N/A")
-                je = row.get("accountingDocument", "N/A")
-                lines.append(f"Billing {bd} ← Sales Order {so} ← Delivery {dd}")
-                if je and je != "N/A":
-                    lines.append(f"  → Journal Entry {je}")
-            lines.append(f"\nTotal rows: {len(df)}.")
-            return "\n".join(lines)
+        # Generic summary for any other query
+        return f"""Query completed successfully! 
 
-        # Generic summary
-        preview = df.head(5).to_dict(orient="records")
-        return f"Query completed successfully with {len(df)} rows. First 5 records: {json.dumps(preview, default=str)}"
+📊 Results: {len(df)} records found
+
+**Summary:** Your query returned {len(df)} results. Here are the first few records:
+
+{self._format_table_summary(df.head(10))}
+
+Use the "Show SQL" button to see the exact query used, and explore the results in the data table below."""
+
+    def _format_table_summary(self, df: pd.DataFrame) -> str:
+        """Format a DataFrame as a readable text summary."""
+        if df.empty:
+            return "No data to display"
+        
+        lines = []
+        cols_to_show = df.columns.tolist()[:4]  # Show first 4 columns
+        
+        for i, row in df.iterrows():
+            formatted_row = ", ".join([
+                f"{col}: {row[col]}"
+                for col in cols_to_show
+                if col in df.columns
+            ])
+            lines.append(f"• {formatted_row}")
+        
+        if len(df.columns) > 4:
+            lines.append(f"  ... and {len(df.columns) - 4} more columns")
+        
+        return "\n".join(lines)
 
     def _extract_ids(self, text: str) -> list[str]:
         """Extract document IDs from response text for highlighting."""
