@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>O2C Graph Analysis - Graph Explorer</title>
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --card: #ffffff;
+      --ink: #1c2430;
+      --muted: #6f7a89;
+      --primary: #0f766e;
+      --accent: #dc2626;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --line: #d9dee7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      color: var(--ink);
+      background: radial-gradient(circle at top right, #dff4f1, var(--bg));
+      min-height: 100vh;
+    }
+    header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: var(--card);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    .title { 
+      font-weight: 700; 
+      font-size: 18px;
+      background: linear-gradient(135deg, var(--primary), #059669);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .sub { 
+      font-size: 12px; 
+      color: var(--muted); 
+      margin-top: 2px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 12px;
+      padding: 12px;
+      height: calc(100vh - 66px);
+    }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    .panel-head {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      background: #f9fafb;
+    }
+    .panel-head h3 { 
+      margin: 0; 
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    #network { 
+      width: 100%; 
+      flex: 1; 
+      min-height: 360px; 
+      background: #fafbfd;
+    }
+
+    .search-wrap { 
+      display: flex; 
+      gap: 6px;
+      flex: 1;
+    }
+    input, button, textarea {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.1);
+    }
+    button {
+      cursor: pointer;
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #0d5f5a;
+    }
+    button.alt {
+      background: #fff;
+      color: var(--ink);
+      border-color: var(--line);
+    }
+    button.alt:hover {
+      background: #f9fafb;
+    }
+
+    .meta {
+      padding: 10px 12px;
+      border-top: 1px solid var(--line);
+      max-height: 180px;
+      overflow: auto;
+      font-size: 12px;
+      color: var(--muted);
+      background: #fafbfd;
+      line-height: 1.4;
+    }
+    
+    .meta code {
+      background: #f0f0f0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: "Courier New", monospace;
+      font-size: 10px;
+      color: var(--ink);
+    }
+    
+    /* Chat Interface Styles */
+    .agent-header {
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: linear-gradient(135deg, #dff4f1, #f0fdf4);
+    }
+    
+    .agent-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      flex-shrink: 0;
+      font-size: 16px;
+    }
+    
+    .agent-info h4 {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    
+    .agent-role {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+    
+    .chat-body {
+      flex: 1;
+      overflow: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: #fafbfd;
+    }
+    
+    .message {
+      display: flex;
+      gap: 8px;
+      animation: slideIn 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .message.user {
+      justify-content: flex-end;
+    }
+    
+    .message.agent {
+      justify-content: flex-start;
+    }
+    
+    .message-bubble {
+      max-width: 90%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.5;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    
+    .message.user .message-bubble {
+      background: var(--primary);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+    
+    .message.agent .message-bubble {
+      background: var(--card);
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-bottom-left-radius: 4px;
+    }
+    
+    .typing-indicator {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    
+    .typing-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+      animation: typing 1.4s infinite;
+    }
+    
+    .typing-dot:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    
+    .typing-dot:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+    
+    @keyframes typing {
+      0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+      30% { opacity: 1; transform: translateY(-6px); }
+    }
+    
+    .sql-wrap {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 6px 8px;
+      max-width: 96%;
+      align-self: flex-start;
+      font-size: 11px;
+      margin-top: 6px;
+    }
+    
+    .sql-toggle {
+      cursor: pointer;
+      font-size: 11px;
+      color: #475569;
+      user-select: none;
+      font-weight: 600;
+      padding: 4px 0;
+    }
+    
+    .sql {
+      font-family: "Courier New", monospace;
+      font-size: 10px;
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 8px;
+      border-radius: 4px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin-top: 6px;
+      line-height: 1.3;
+      display: none;
+    }
+    
+    .chat-input { 
+      padding: 10px; 
+      border-top: 1px solid var(--line); 
+      display: grid; 
+      gap: 8px;
+      background: var(--card);
+    }
+
+    @media (max-width: 1100px) {
+      .layout { 
+        grid-template-columns: 1fr; 
+        height: auto; 
+      }
+      .panel { 
+        min-height: 500px; 
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="title">📊 SAP O2C Graph Explorer</div>
+    <div class="sub">Interactive Order-to-Cash visualization with AI analysis</div>
+  </div>
+  <div id="health" class="sub" style="text-align: right;">loading...</div>
+</header>
+
+<div class="layout">
+  <!-- Left: Graph Explorer -->
+  <section class="panel">
+    <div class="panel-head">
+      <h3> Graph Explorer</h3>
+      <div class="search-wrap">
+        <input id="searchInput" placeholder="Search documents..." />
+        <button class="alt" id="searchBtn">Search</button>
+        <button class="alt" id="resetBtn">Reset</button>
+      </div>
+    </div>
+    <div id="network"></div>
+    <div class="meta" id="nodeMeta">
+      <div style="text-align: center; color: var(--muted); padding: 20px;">
+        Click a node to inspect metadata and expand neighbors
+      </div>
+    </div>
+  </section>
+
+  <!-- Right: Chat Interface -->
+  <section class="panel">
+    <div class="agent-header">
+      <div class="agent-avatar">🤖</div>
+      <div class="agent-info">
+        <h4>Graph Agent</h4>
+        <div class="agent-role">O2C Analysis</div>
+      </div>
+    </div>
+    
+    <div class="chat-body" id="chatBody"></div>
+    
+    <div class="chat-input">
+      <textarea id="q" rows="4" placeholder="Ask questions like:
+• Which products have most billing?
+• Trace billing document 90504248
+• Find incomplete flows"
+      ></textarea>
+      <button id="askBtn">Ask Query</button>
+    </div>
+  </section>
+</div>
+
+<script>
+  const tableColors = {
+    sales_order_headers: "#dc2626",
+    sales_order_items: "#f87171",
+    sales_order_schedule_lines: "#fecaca",
+    outbound_delivery_headers: "#0f766e",
+    outbound_delivery_items: "#14b8a6",
+    billing_document_headers: "#d97706",
+    billing_document_items: "#f59e0b",
+    journal_entry_items_accounts_receivable: "#2563eb",
+    payments_accounts_receivable: "#4f46e5",
+    business_partners: "#334155",
+    business_partner_addresses: "#64748b",
+    products: "#7c3aed",
+    product_descriptions: "#a78bfa",
+    product_plants: "#5b21b6",
+    product_storage_locations: "#6d28d9",
+    plants: "#0369a1",
+    customer_company_assignments: "#075985",
+    customer_sales_area_assignments: "#0c4a6e",
+  };
+
+  let network;
+  let nodes;
+  let edges;
+
+  function addMsg(text, cls, sql) {
+    const chat = document.getElementById("chatBody");
+    const msg = document.createElement("div");
+    msg.className = `message ${cls}`;
+    
+    const bubble = document.createElement("div");
+    bubble.className = "message-bubble";
+    bubble.textContent = text;
+    msg.appendChild(bubble);
+    
+    if (sql) {
+      const sqlWrap = document.createElement("div");
+      sqlWrap.className = "sql-wrap";
+      sqlWrap.innerHTML = `<div class="sql-toggle">📋 Show SQL</div><div class="sql"></div>`;
+      sqlWrap.querySelector(".sql").textContent = sql;
+      sqlWrap.querySelector(".sql-toggle").addEventListener("click", function() {
+        const codeEl = this.nextElementSibling;
+        codeEl.style.display = codeEl.style.display === "none" ? "block" : "none";
+      });
+      msg.appendChild(sqlWrap);
+    }
+    
+    chat.appendChild(msg);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  async function loadHealth() {
+    try {
+      const h = await fetch("/health").then(r => r.json());
+      const llmText = h.llm_enabled ? "✓" : "✗";
+      document.getElementById("health").textContent = 
+        `Nodes: ${h.graph_nodes} | Edges: ${h.graph_edges} | LLM: ${llmText} | Tables: ${Object.keys(h.tables_loaded).length}`;
+    } catch (e) {
+      document.getElementById("health").textContent = "⚠ Connection failed";
+    }
+  }
+
+  function visNode(n) {
+    return {
+      id: n.id,
+      label: `${n.label}`,
+      title: `Type: ${n.table}\nID: ${n.id}`,
+      color: tableColors[n.table] || "#64748b",
+      shape: "dot",
+      size: 14,
+      font: { size: 11, face: "Arial", color: "#fff", bold: { color: "#fff" } },
+      borderWidth: 2,
+      borderWidthSelected: 3,
+      metadata: n.metadata
+    };
+  }
+
+  async function loadGraphSnapshot() {
+    try {
+      const payload = await fetch("/api/graph/snapshot?max_nodes=400&max_edges=800").then(r => r.json());
+      nodes = new vis.DataSet(payload.nodes.map(visNode));
+      edges = new vis.DataSet(payload.edges.map(e => ({ 
+        from: e.from, 
+        to: e.to, 
+        arrows: "to;from", 
+        label: e.label, 
+        font: { align: "middle", size: 9 },
+        color: { color: "#cbd5e1", highlight: "#0f766e" },
+        smooth: { type: "dynamic" }
+      })));
+      
+      const container = document.getElementById("network");
+      network = new vis.Network(container, { nodes, edges }, {
+        physics: { 
+          stabilization: { iterations: 200 },
+          barnesHut: { springLength: 200, springConstant: 0.04 }
+        },
+        interaction: { 
+          hover: true, 
+          multiselect: false,
+          keyboard: true,
+          navigationButtons: true,
+        },
+        edges: { smooth: { type: "dynamic", forceDirection: "none" } }
+      });
+
+      network.on("click", async (params) => {
+        if (!params.nodes.length) return;
+        const nodeId = params.nodes[0];
+        const node = nodes.get(nodeId);
+        
+        // Build formatted metadata table
+        const metaDiv = document.getElementById("nodeMeta");
+        metaDiv.innerHTML = '';
+        
+        const card = document.createElement("div");
+        card.style.cssText = "padding: 12px; border-top: 2px solid var(--primary);";
+        
+        const header = document.createElement("div");
+        header.style.cssText = "font-weight: 600; font-size: 12px; margin-bottom: 8px; color: var(--primary);";
+        header.innerHTML = `📋 ${node.table.toUpperCase()}`;
+        card.appendChild(header);
+        
+        const idRow = document.createElement("div");
+        idRow.style.cssText = "border-bottom: 1px solid var(--line); padding: 6px 0; font-size: 11px;";
+        idRow.innerHTML = `<strong>ID:</strong> <code style="background: #f0f0f0; padding: 2px 4px; border-radius: 3px;">${nodeId}</code>`;
+        card.appendChild(idRow);
+        
+        if (node.metadata && Object.keys(node.metadata).length > 0) {
+          const meta = node.metadata;
+          const keys = Object.keys(meta).slice(0, 15);
+          keys.forEach((k, idx) => {
+            const v = meta[k];
+            if (v !== null && v !== undefined && v !== '') {
+              const row = document.createElement("div");
+              row.style.cssText = `border-bottom: 1px solid #eee; padding: 6px 0; font-size: 11px; ${idx === keys.length - 1 ? 'border-bottom: none;' : ''}`;
+              const valStr = typeof v === 'string' ? v : JSON.stringify(v);
+              const displayVal = valStr.length > 40 ? valStr.substring(0, 37) + '...' : valStr;
+              row.innerHTML = `<strong style="color: var(--primary); min-width: 80px; display: inline-block;">${k}:</strong> <span style="color: var(--muted);">${displayVal}</span>`;
+              card.appendChild(row);
+            }
+          });
+        } else {
+          const empty = document.createElement("div");
+          empty.style.cssText = "color: var(--muted); font-size: 11px; padding: 10px 0;";
+          empty.textContent = "No metadata available";
+          card.appendChild(empty);
+        }
+        
+        metaDiv.appendChild(card);
+
+        const sub = await fetch(`/api/graph/neighbors?node_id=${encodeURIComponent(nodeId)}&depth=2&max_nodes=150`).then(r => r.json());
+        const newNodes = sub.nodes.map(visNode);
+        const newEdges = sub.edges.map(e => ({ 
+          from: e.from, 
+          to: e.to, 
+          arrows: "to;from", 
+          label: e.label, 
+          font: { align: "middle", size: 9 }
+        }));
+        nodes.update(newNodes);
+        edges.update(newEdges);
+      });
+    } catch (e) {
+      addMsg("Failed to load graph: " + e.message, "agent");
+    }
+  }
+
+  async function doSearch() {
+    const q = document.getElementById("searchInput").value.trim();
+    if (!q) return;
+    try {
+      const res = await fetch(`/api/graph/search?q=${encodeURIComponent(q)}`).then(r => r.json());
+      if (!res.results.length) {
+        alert("No matching nodes found.");
+        return;
+      }
+      const first = res.results[0];
+      network.selectNodes([first.id], false);
+      network.focus(first.id, { scale: 1.5, animation: { duration: 500 } });
+    } catch (e) {
+      alert("Search failed: " + e.message);
+    }
+  }
+
+  async function ask() {
+    const q = document.getElementById("q").value.trim();
+    if (!q) return;
+    
+    addMsg(q, "user");
+    document.getElementById("q").value = "";
+    
+    const chatBody = document.getElementById("chatBody");
+    const typingMsg = document.createElement("div");
+    typingMsg.className = "message agent";
+    typingMsg.innerHTML = `<div class="message-bubble"><div class="typing-indicator">
+      <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
+    </div></div>`;
+    chatBody.appendChild(typingMsg);
+    chatBody.scrollTop = chatBody.scrollHeight;
+
+    try {
+      const res = await fetch("/api/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q })
+      }).then(r => r.json());
+
+      typingMsg.remove();
+      addMsg(res.answer, "agent", res.sql || null);
+
+      if (res.highlighted_nodes && res.highlighted_nodes.length > 0) {
+        const ids = nodes.getIds();
+        const matching = ids.filter(id => res.highlighted_nodes.some(x => id.includes(x)));
+        if (matching.length) {
+          network.selectNodes(matching.slice(0, 25));
+          if (matching.length > 0) {
+            network.fit({ nodes: matching.slice(0, 25), animation: true });
+          }
+        }
+      }
+    } catch (e) {
+      typingMsg.remove();
+      addMsg("Error: " + e.message, "agent");
+    }
+  }
+
+  document.getElementById("searchBtn").addEventListener("click", doSearch);
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    network.fit({ animation: true });
+    document.getElementById("nodeMeta").textContent = "Click a node to view details";
+  });
+  
+  document.getElementById("askBtn").addEventListener("click", ask);
+  document.getElementById("q").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.ctrlKey) ask();
+  });
+  
+  loadHealth();
+  loadGraphSnapshot();
+  addMsg("Hi! I can help you analyze the Order-to-Cash process. Ask me anything about orders, deliveries, billing, or payments!", "agent");
+</script>
+
+</body>
+</html>
