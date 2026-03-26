@@ -59,6 +59,76 @@ class QueryEngine:
         """Generate SQL for known query patterns."""
         q = question.lower()
 
+        # Generic product listing
+        if ("product" in q or "material" in q) and ("show" in q or "list" in q or "what" in q or "display" in q or "have" in q):
+            return """
+                SELECT DISTINCT p.product,
+                       pd.productDescription,
+                       COUNT(DISTINCT pp.plant) AS plant_count,
+                       COUNT(DISTINCT psl.storageLocation) AS storage_locations
+                FROM products p
+                LEFT JOIN product_descriptions pd ON p.product = pd.product AND pd.language = 'EN'
+                LEFT JOIN product_plants pp ON p.product = pp.product
+                LEFT JOIN product_storage_locations psl ON p.product = psl.product AND pp.plant = psl.plant
+                GROUP BY p.product, pd.productDescription
+                ORDER BY p.product
+                LIMIT 100
+            """
+
+        # Generic customer listing
+        if ("customer" in q or "partner" in q) and ("show" in q or "list" in q or "what" in q or "display" in q or "have" in q):
+            return """
+                SELECT bp.businessPartner,
+                       bp.businessPartnerName,
+                       COUNT(DISTINCT soh.salesOrder) AS total_orders,
+                       COUNT(DISTINCT bdh.billingDocument) AS total_invoices
+                FROM business_partners bp
+                LEFT JOIN sales_order_headers soh ON bp.businessPartner = soh.soldToParty
+                LEFT JOIN billing_document_headers bdh ON bp.businessPartner = bdh.soldToParty
+                GROUP BY bp.businessPartner, bp.businessPartnerName
+                ORDER BY total_orders DESC
+                LIMIT 100
+            """
+
+        # Generic order-to-delivery-to-billing flow (entire O2C process)
+        if ("flow" in q or "o2c" in q or "order" in q) and ("delivery" in q or "billing" in q or "end-to-end" in q or "process" in q):
+            return """
+                WITH orders AS (
+                    SELECT DISTINCT salesOrder,
+                           soldToParty,
+                           creationDate
+                    FROM sales_order_headers
+                    LIMIT 50
+                ),
+                deliveries AS (
+                    SELECT DISTINCT odi.referenceSdDocument AS salesOrder,
+                           odh.deliveryDocument,
+                           odh.documentDate
+                    FROM outbound_delivery_items odi
+                    JOIN outbound_delivery_headers odh ON odi.deliveryDocument = odh.deliveryDocument
+                ),
+                billings AS (
+                    SELECT DISTINCT bdi.referenceSdDocument AS salesOrder,
+                           bdh.billingDocument,
+                           bdh.billingDocumentDate
+                    FROM billing_document_items bdi
+                    JOIN billing_document_headers bdh ON bdi.billingDocument = bdh.billingDocument
+                )
+                SELECT o.salesOrder,
+                       bp.businessPartnerName AS customer,
+                       d.deliveryDocument,
+                       b.billingDocument,
+                       o.creationDate,
+                       d.documentDate,
+                       b.billingDocumentDate
+                FROM orders o
+                LEFT JOIN business_partners bp ON o.soldToParty = bp.businessPartner
+                LEFT JOIN deliveries d ON o.salesOrder = d.salesOrder
+                LEFT JOIN billings b ON o.salesOrder = b.salesOrder
+                ORDER BY o.salesOrder
+                LIMIT 50
+            """
+
         # Query a: Which products are associated with highest number of billing documents?
         if ("highest" in q or "most" in q) and "billing" in q and ("product" in q or "material" in q):
             return """
