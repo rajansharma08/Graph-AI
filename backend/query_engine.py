@@ -333,7 +333,7 @@ Provide a natural language business summary:
                 desc = row.get("productDescription", "No description")
                 plants = row.get("plant_count", 0)
                 storage = row.get("storage_locations", 0)
-                lines.append(f"• **{product}** - {desc}")
+                lines.append(f"• {product} - {desc}")
                 if plants and plants > 0:
                     lines.append(f"  Available in {plants} plant(s) with {storage} storage location(s)")
             if len(df) > 20:
@@ -345,7 +345,7 @@ Provide a natural language business summary:
             lines = [f"Company has {len(df)} business partners:\n"]
             total_orders = df["total_orders"].sum() if "total_orders" in cols else 0
             total_invoices = df["total_invoices"].sum() if "total_invoices" in cols else 0
-            lines.append(f"📊 Overall Statistics:")
+            lines.append(f"Overall Statistics:")
             lines.append(f"  • Total Customers: {len(df)}")
             lines.append(f"  • Total Orders: {int(total_orders)}")
             lines.append(f"  • Total Invoices: {int(total_invoices)}\n")
@@ -366,7 +366,7 @@ Provide a natural language business summary:
             completed = df[df["billingDocument"].notna()].shape[0] if "billingDocument" in cols else 0
             delivered = df[df["deliveryDocument"].notna()].shape[0] if "deliveryDocument" in cols else 0
             
-            lines.append(f"📈 Process Status:")
+            lines.append(f"Process Status:")
             lines.append(f"  • Total Sales Orders: {total}")
             lines.append(f"  • Orders Delivered: {delivered} ({int(delivered/max(total,1)*100)}%)")
             lines.append(f"  • Orders Billed: {completed} ({int(completed/max(total,1)*100)}%)\n")
@@ -409,9 +409,9 @@ Provide a natural language business summary:
         # Generic summary for any other query
         return f"""Query completed successfully! 
 
-📊 Results: {len(df)} records found
+Results: {len(df)} records found
 
-**Summary:** Your query returned {len(df)} results. Here are the first few records:
+Summary: Your query returned {len(df)} results. Here are the first few records:
 
 {self._format_table_summary(df.head(10))}
 
