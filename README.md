@@ -6,7 +6,7 @@
 
 **Live Demo:** https://graph-ai-7o34.onrender.com/
 
-**Source Code:** https://github.com/rajansharma08/Graph-AI-Deploy
+**Source Code:** https://github.com/rajansharma08/Graph-AI
 
 ---
 
