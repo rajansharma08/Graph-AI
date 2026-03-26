@@ -1,0 +1,15 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.env.example
+FIREBASE_SETUP.md
+upload_to_firebase.py
+backend/firebase_storage.py
+.venv
+venv
+.pytest_cache
+.coverage
+*.db
