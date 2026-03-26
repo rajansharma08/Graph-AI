@@ -3,7 +3,6 @@ Data layer for loading JSONL files from the Data folder into DuckDB.
 """
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -14,28 +13,10 @@ from .schema_config import TABLE_CONFIG
 
 
 class DataLayer:
-    def __init__(self, data_root: Path, use_firebase: bool = False):
+    def __init__(self, data_root: Path):
         self.data_root = data_root
-        self.use_firebase = use_firebase and os.getenv("FIREBASE_CREDENTIALS_JSON")
         self.conn = duckdb.connect(database=":memory:")
         self.table_columns: dict[str, list[str]] = {}
-        
-        # Download from Firebase if needed
-        if self.use_firebase:
-            self._ensure_data_downloaded()
-    
-    def _ensure_data_downloaded(self) -> None:
-        """Download Data folder from Firebase if not present locally."""
-        if not self.data_root.exists() or not list(self.data_root.glob("*")):
-            print("Data folder not found locally. Downloading from Firebase...")
-            try:
-                from .firebase_storage import FirebaseStorage
-                firebase = FirebaseStorage()
-                firebase.download_data_folder(self.data_root)
-                print("Download successful!")
-            except Exception as e:
-                print(f"Warning: Could not download from Firebase: {e}")
-                print("Continuing with local data if available...")
 
 
     def _read_jsonl_file(self, file_path: Path) -> list[dict[str, Any]]:
