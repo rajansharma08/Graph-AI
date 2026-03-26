@@ -42,7 +42,10 @@ class QueryRequest(BaseModel):
 
 
 # Initialize data layer and load tables
-data_layer = DataLayer(DATA_DIR)
+use_firebase = os.getenv("USE_FIREBASE", "false").lower() == "true"
+if use_firebase:
+    print("Firebase enabled for data loading...")
+data_layer = DataLayer(DATA_DIR, use_firebase=use_firebase)
 load_stats = data_layer.load_tables()
 
 # Build graph from loaded tables
